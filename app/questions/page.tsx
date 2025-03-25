@@ -1,70 +1,83 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/lib/supabase/client';
 
-export default function QuestionsPage() {
-  const [questions, setQuestions] = useState<any[]>([]);
+interface Question {
+  id: string;
+  title: string;
+  content: string;
+  created_at: string;
+  profiles: {
+    username: string;
+  };
+}
+
+interface PageProps {
+  params: {
+    id: string;
+  };
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
+
+export default function QuestionPage({ params }: PageProps) {
+  const [question, setQuestion] = useState<Question | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchQuestions = async () => {
+    const fetchQuestion = async () => {
       const { data, error } = await supabase
         .from('questions')
         .select(`
           *,
           profiles (username)
         `)
-        .order('created_at', { ascending: false });
+        .eq('id', params.id)
+        .single();
 
-      if (error) {
-        console.error('Error fetching questions:', error);
+      if (error || !data) {
+        setLoading(false);
+        notFound();
         return;
       }
 
-      setQuestions(data || []);
+      setQuestion(data);
+      setLoading(false);
     };
 
-    fetchQuestions();
-  }, []);
+    fetchQuestion();
+  }, [params.id]);
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-3/4 mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/4 mb-8"></div>
+          <div className="h-24 bg-gray-200 rounded mb-4"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!question) {
+    return notFound();
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Recent Questions</h1>
-        <Button asChild>
-          <Link href="/ask">Ask a Question</Link>
-        </Button>
-      </div>
-
-      <div className="space-y-4">
-        {questions.map((question) => (
-          <div
-            key={question.id}
-            className="border rounded-lg p-6 bg-white shadow-sm hover:shadow-md transition-shadow"
-          >
-            <Link
-              href={`/questions/${question.id}`}
-              className="block group"
-            >
-              <h2 className="text-xl font-semibold group-hover:text-blue-600 transition-colors">
-                {question.title}
-              </h2>
-              <p className="mt-2 text-gray-600 line-clamp-2">
-                {question.content}
-              </p>
-              <div className="mt-4 text-sm text-gray-500">
-                Asked by {question.profiles?.username || 'Anonymous'} •{' '}
-                {formatDistanceToNow(new Date(question.created_at), {
-                  addSuffix: true,
-                })}
-              </div>
-            </Link>
-          </div>
-        ))}
-      </div>
+      <article className="bg-white rounded-lg shadow-sm p-6">
+        <h1 className="text-3xl font-bold mb-4">{question.title}</h1>
+        <div className="text-sm text-gray-500 mb-6">
+          Asked by {question.profiles?.username || 'Anonymous'} •{' '}
+          {formatDistanceToNow(new Date(question.created_at), { addSuffix: true })}
+        </div>
+        <div className="prose max-w-none">
+          {question.content}
+        </div>
+      </article>
     </div>
   );
 }
